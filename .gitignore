@@ -1,0 +1,28 @@
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Accidental files
+nul
+
+# IDA Pro database files
+*.i64
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+
+# Application files (users get these from official installer)
+UpdateFirmware.exe
+UpdateFirmware_patched.exe
+jl_firmware_upgrade_x86.dll
+
+# Firmware files (too large / user-specific)
+*.ufw
+
+# IDA MCP server
+ida-pro-mcp/
+
+# Screenshots except main one
+screen-patched.png
