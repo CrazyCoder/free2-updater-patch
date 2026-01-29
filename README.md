@@ -2,7 +2,7 @@
 
 ![Free2 Bluetooth Page Turner](free2.png)
 
-A patch for the JieLi firmware updater used by **Free2 Bluetooth page turner** devices. Bypasses the VID (Version ID) check that incorrectly rejects compatible firmware due to floating-point comparison issues.
+A patch for the JieLi firmware updater used by **Free2 Bluetooth page turner** devices. Bypasses the VID (Version ID) check that fails due to a buffer handling bug in the DLL.
 
 ## Confirmed Working
 
@@ -43,45 +43,63 @@ The JieLi firmware updater (`UpdateFirmware.exe`) refuses to flash firmware even
 
 ## Root Cause Analysis
 
-### Why It Fails Even With Matching VIDs
+### The DLL Buffer Bug
 
-The application reads VID values from UI labels as text strings, converts them to **floating-point numbers** using `QString::toFloat()`, and then compares them:
+The VID comparison fails due to a **buffer handling bug** in `jl_firmware_upgrade_x86.dll`. When the DLL returns the device VID string, it doesn't properly null-terminate the buffer.
+
+**What happens:**
+
+1. The EXE calls `JL_queryDevicePidVid()` in the DLL to get the device VID
+2. The DLL writes the VID string (e.g., `"0.12"`) to a buffer but **fails to null-terminate** it
+3. The EXE uses `QString::fromLocal8Bit(buffer, -1)` which reads until it finds a null byte
+4. This picks up **garbage bytes** (uninitialized memory: `0xFF` = `'я'` in Cyrillic)
+5. The UI displays: `"0.12яяяяяяяяяяя"` (VID followed by garbage)
+6. `QString::toFloat("0.12яяяяяяяяяяя")` **fails to parse** and returns `0`
+7. The comparison `0 == 0.12` fails → **Error -30**
+
+### Debug Evidence
+
+Running with debug output enabled shows the actual parsed values:
+
+```
+Device VID (parsed):   0      ← Parse failed due to garbage
+Firmware VID (parsed): 0.12  ← Parsed correctly
+```
+
+Meanwhile, the UI displays:
+- Device VID field: `0.12яяяяяяяяяяя` (garbage visible)
+- Firmware VID field: `0.12`
+
+### The Flawed Comparison
+
+The check occurs in function `sub_403750` at address `0x4037E2`:
 
 ```c
-device_vid = QString::toFloat(label_device_vid->text());
-firmware_vid = QString::toFloat(label_vid->text());
+device_vid = QString::toFloat(label_device_vid->text());   // Returns 0 (parse failure)
+firmware_vid = QString::toFloat(label_vid->text());        // Returns 0.12
 
-if (device_vid == firmware_vid) {
+if (device_vid < 0.01 || device_vid == firmware_vid) {
     // Allow upgrade
 } else {
     return -30;  // Error: firmware doesn't match
 }
 ```
 
-**The problem:** Floating-point comparison (`==`) is inherently unreliable due to precision limitations. Two VID values that *display* identically (e.g., "1.00") may have slightly different internal representations:
-- `1.0000000000` vs `0.9999999999`
-- `1.00` vs `1.000000001`
+Since `device_vid` is `0` (not the actual VID), and `0 != 0.12`, the check fails.
 
-This causes the equality check to fail even when the values appear the same to the user.
+### Why It Works in Chinese Locale
 
-### Where The "Garbage" Comes From
+Testing with [Locale Emulator](https://github.com/xupefei/Locale-Emulator) confirmed the bug is **locale-dependent**:
 
-The VID values go through multiple conversions:
-1. **Firmware file** → Binary data → String → Float
-2. **Device query** → DLL response → String → Float
+| Locale | Code Page | 0xFF Interpretation | Result |
+|--------|-----------|---------------------|--------|
+| Chinese (Simplified) | 936 (GBK) | Part of multi-byte sequence | **Works** |
+| Cyrillic (Russian) | 1251 | 'я' (valid character) | **Fails** |
+| Western European | 1252 | 'ÿ' (valid character) | Likely fails |
 
-Each conversion can introduce tiny floating-point rounding errors. When comparing these independently-derived floats, the accumulated errors cause `==` to return `false`.
+In **GBK (Chinese)**, `0xFF` is a lead byte for multi-byte characters. When `QString::fromLocal8Bit()` encounters `0xFF` followed by invalid continuation bytes, it likely stops or handles the error gracefully, resulting in a clean string that parses correctly.
 
-### The Flawed Logic Location
-
-The check occurs in function `sub_403750` at address `0x4037E2`:
-
-```asm
-4037e2  jnp     short loc_4037EB     ; Jump to upgrade if VIDs "equal"
-4037e4  mov     esi, 0FFFFFFE2h      ; Otherwise: error code -30
-```
-
-The `jnp` (jump if not parity) instruction is used after a floating-point comparison, which relies on the CPU's parity flag to determine equality—an approach that fails with imprecise floats.
+In **single-byte encodings** (CP1251, CP1252), `0xFF` is a valid standalone character, so garbage gets appended to the string.
 
 ## The Patch
 
@@ -95,13 +113,26 @@ The patch changes the conditional jump to an **unconditional jump**, bypassing t
 
 This allows flashing any firmware regardless of VID mismatch, which is safe for compatible devices where only the version numbering differs.
 
-## Usage
+## Workarounds
 
-### Pre-patched Download
+### Option 1: Use the Patched EXE (Recommended)
 
-Both the original and patched `UpdateFirmware.exe` files are available in the [Releases](../../releases) section of this repository.
+Download the pre-patched `UpdateFirmware.exe` from the [Releases](../../releases) section.
 
-### Apply the Patch Yourself
+### Option 2: Use Locale Emulator
+
+If you prefer not to patch the executable, you can run it with Chinese locale using [Locale Emulator](https://github.com/xupefei/Locale-Emulator):
+
+1. Download and install [Locale Emulator](https://github.com/xupefei/Locale-Emulator/releases)
+2. Run `LEInstaller.exe` and click "Install for current user"
+3. Navigate to the UpdateFirmware.exe location:
+   ```
+   C:\Users\<username>\AppData\Local\Programs\hanlinyue\resources\extraResources\exe\
+   ```
+4. Right-click `UpdateFirmware.exe` → **Locale Emulator** → **Run in Chinese (Simplified)**
+5. Proceed with firmware update as normal
+
+### Option 3: Apply the Patch Yourself
 
 **PowerShell:**
 ```powershell

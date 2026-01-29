@@ -2,8 +2,9 @@
 .claude/
 CLAUDE.md
 
-# Accidental files
+# Accidental/temp files
 nul
+release.md
 
 # IDA Pro database files
 *.i64
