@@ -1,5 +1,7 @@
 # UpdateFirmware VID Check Bypass Patch
 
+![Free2 Bluetooth Page Turner](free2.png)
+
 A patch for the JieLi firmware updater used by **Free2 Bluetooth page turner** devices. Bypasses the VID (Version ID) check that incorrectly rejects compatible firmware due to floating-point comparison issues.
 
 ## Confirmed Working
