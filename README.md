@@ -129,8 +129,9 @@ If you prefer not to patch the executable, you can run it with Chinese locale us
    ```
    C:\Users\<username>\AppData\Local\Programs\hanlinyue\resources\extraResources\exe\
    ```
-4. Right-click `UpdateFirmware.exe` → **Locale Emulator** → **Run in Chinese (Simplified)**
-5. Proceed with firmware update as normal
+4. Right-click `UpdateFirmware.exe` → **Locale Emulator** → **Run with application profile**
+5. Set **Location** to `Chinese (Simplified)` and click **Save**
+6. The app will start and the profile is saved. Next time, just use **Run with application profile**
 
 ### Option 3: Apply the Patch Yourself
 
