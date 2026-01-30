@@ -4,11 +4,22 @@
 
 A patch for the JieLi firmware updater used by **Free2 Bluetooth page turner** devices. Bypasses the VID (Version ID) check that fails due to a buffer handling bug in the DLL.
 
+## Device Versions (VID)
+
+The VID (Version ID) identifies the device hardware generation:
+
+| Device Generation | VID | Buttons | Notes |
+|-------------------|-----|---------|-------|
+| **Free2** | 0.12 | 2 | Original version |
+| **Free3** | 0.13 | 3 | Newer hardware |
+
+> **⚠️ Warning:** Before flashing, verify that the **Device VID** and **Firmware VID** displayed in the updater match your device generation. This patch bypasses the VID check, but flashing firmware for the wrong hardware generation may brick your device. The DLL may not perform additional compatibility validation.
+
 ## Confirmed Working
 
-| Device | Firmware | Category |
-|--------|----------|----------|
-| **Xteink X4** | E730LJ | Android e-readers, Yuexingtong |
+| Device | Firmware | VID | Category |
+|--------|----------|-----|----------|
+| **Xteink X4** | E730LJ | 0.12 | Android e-readers, Yuexingtong |
 
 ## Downloads
 
@@ -188,9 +199,11 @@ This patch was developed for a specific version of the updater:
 - **Section:** `.text`
 - **Function:** `sub_403750` (manual flash handler)
 
-### Why This Patch Is Safe
+### Patch Safety Notes
 
-The patch only bypasses the **VID comparison** in the EXE. The actual firmware flashing is performed by the DLL (`jl_firmware_upgrade_x86.dll`), which has its own internal validation. If the firmware is truly incompatible with the hardware, the DLL will reject it.
+The patch only bypasses the **VID comparison** in the EXE. The actual firmware flashing is performed by the DLL (`jl_firmware_upgrade_x86.dll`).
+
+> **⚠️ Important:** It is **not confirmed** whether the DLL performs additional hardware compatibility checks. Always verify that the displayed VIDs match your device generation (Free2 = 0.12, Free3 = 0.13) before flashing. Flashing firmware intended for a different hardware generation may cause permanent damage.
 
 ## Disclaimer
 
