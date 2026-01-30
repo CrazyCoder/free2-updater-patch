@@ -1,6 +1,6 @@
 # UpdateFirmware VID Check Bypass Patch
-# Patches UpdateFirmware.exe to bypass the VID comparison that incorrectly
-# rejects compatible firmware due to floating-point comparison issues.
+# Patches UpdateFirmware.exe to bypass the VID comparison that fails due to
+# a DLL buffer bug (VID string not null-terminated, causing parse issues).
 
 $ErrorActionPreference = "Stop"
 

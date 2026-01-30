@@ -20,6 +20,12 @@ A patch for the JieLi firmware updater used by **Free2 Bluetooth page turner** d
 
 > **Note:** If the sites don't open, try using a VPN (servers are located in China).
 
+### Changing the App Language
+
+The updater app defaults to Chinese. To switch to English:
+1. Click the menu in the top-left corner (shows as "语言" or similar Chinese text)
+2. Select your preferred language
+
 ### Locating UpdateFirmware.exe
 
 After installing the updater app, `UpdateFirmware.exe` is located at:
@@ -45,61 +51,66 @@ The JieLi firmware updater (`UpdateFirmware.exe`) refuses to flash firmware even
 
 ### The DLL Buffer Bug
 
-The VID comparison fails due to a **buffer handling bug** in `jl_firmware_upgrade_x86.dll`. When the DLL returns the device VID string, it doesn't properly null-terminate the buffer.
+The VID comparison fails due to a **buffer handling bug** in `jl_firmware_upgrade_x86.dll`. The two DLL functions that return VID strings behave differently:
+
+| Function | Purpose | Buffer Behavior |
+|----------|---------|-----------------|
+| `JL_queryDevicePidVid` | Get device VID | ✓ Properly null-terminated |
+| `JL_getUfwPidVid` | Get firmware VID | ✗ Fills with 0xFF, null at position 27 |
 
 **What happens:**
 
-1. The EXE calls `JL_queryDevicePidVid()` in the DLL to get the device VID
-2. The DLL writes the VID string (e.g., `"0.12"`) to a buffer but **fails to null-terminate** it
-3. The EXE uses `QString::fromLocal8Bit(buffer, -1)` which reads until it finds a null byte
-4. This picks up **garbage bytes** (uninitialized memory: `0xFF` = `'я'` in Cyrillic)
-5. The UI displays: `"0.12яяяяяяяяяяя"` (VID followed by garbage)
-6. `QString::toFloat("0.12яяяяяяяяяяя")` **fails to parse** and returns `0`
-7. The comparison `0 == 0.12` fails → **Error -30**
+1. **Device VID** (`JL_queryDevicePidVid`): Returns `"0.12\0\0\0..."` — clean, null at position 4
+2. **Firmware VID** (`JL_getUfwPidVid`): Returns `"0.12\xFF\xFF\xFF..."` — garbage, null at position 27
+3. EXE uses `QString::fromLocal8Bit(buffer, -1)` which reads until null byte
+4. Device VID becomes `"0.12"` (clean) → `toFloat()` = **0.12**
+5. Firmware VID becomes `"0.12яяяяяяяяяяя"` (garbage in Cyrillic) → `toFloat()` = **0.0** (parse failure)
+6. Comparison: `0.12 < 0.01`? NO. `0.12 == 0.0`? NO. → **Error -30**
 
-### Debug Evidence
-
-Running with debug output enabled shows the actual parsed values:
+### Test Evidence (from test_dll)
 
 ```
-Device VID (parsed):   0      ← Parse failed due to garbage
-Firmware VID (parsed): 0.12  ← Parsed correctly
+Device VID buffer (JL_queryDevicePidVid):
+  Hex: 30 2E 31 32 00 00 00 00 00 00 00 00...
+  First null at: 4
+  ASCII: "0.12"  ← CLEAN
+
+Firmware VID buffer (JL_getUfwPidVid):
+  Hex: 30 2E 31 32 FF FF FF FF FF FF FF FF...FF 00
+  First null at: 27
+  ASCII: "0.12......................."  ← GARBAGE (0xFF padding)
 ```
 
-Meanwhile, the UI displays:
-- Device VID field: `0.12яяяяяяяяяяя` (garbage visible)
-- Firmware VID field: `0.12`
-
-### The Flawed Comparison
+### The VID Comparison
 
 The check occurs in function `sub_403750` at address `0x4037E2`:
 
 ```c
-device_vid = QString::toFloat(label_device_vid->text());   // Returns 0 (parse failure)
-firmware_vid = QString::toFloat(label_vid->text());        // Returns 0.12
+device_vid = QString::toFloat(label_device_vid->text());   // → 0.12 (clean)
+firmware_vid = QString::toFloat(label_firmware_vid->text()); // → 0.0 (garbage parse fail)
 
 if (device_vid < 0.01 || device_vid == firmware_vid) {
     // Allow upgrade
 } else {
-    return -30;  // Error: firmware doesn't match
+    return -30;  // Error: 0.12 < 0.01? NO. 0.12 == 0.0? NO.
 }
 ```
 
-Since `device_vid` is `0` (not the actual VID), and `0 != 0.12`, the check fails.
+The mismatch between clean device VID (0.12) and garbage firmware VID (0.0) causes the comparison to fail.
 
 ### Why It Works in Chinese Locale
 
 Testing with [Locale Emulator](https://github.com/xupefei/Locale-Emulator) confirmed the bug is **locale-dependent**:
 
-| Locale | Code Page | 0xFF Interpretation | Result |
-|--------|-----------|---------------------|--------|
-| Chinese (Simplified) | 936 (GBK) | Part of multi-byte sequence | **Works** |
-| Cyrillic (Russian) | 1251 | 'я' (valid character) | **Fails** |
-| Western European | 1252 | 'ÿ' (valid character) | Likely fails |
+| Locale | Code Page | 0xFF Interpretation | Firmware VID Parse | Result |
+|--------|-----------|---------------------|-------------------|--------|
+| Chinese (Simplified) | 936 (GBK) | Multi-byte lead byte | Likely 0.12 or 0.0 | **Works** |
+| Cyrillic (Russian) | 1251 | 'я' (valid character) | 0.0 (parse fail) | **Fails** |
+| Western European | 1252 | 'ÿ' (valid character) | 0.0 (parse fail) | Likely fails |
 
-In **GBK (Chinese)**, `0xFF` is a lead byte for multi-byte characters. When `QString::fromLocal8Bit()` encounters `0xFF` followed by invalid continuation bytes, it likely stops or handles the error gracefully, resulting in a clean string that parses correctly.
+In **GBK (Chinese)**, `0xFF` is a lead byte for multi-byte characters. When `QString::fromLocal8Bit()` encounters `0xFF` followed by invalid continuation bytes, Qt handles the error differently—either truncating the string or producing a result where both VIDs parse to the same value (both 0.12 or both 0.0), allowing the comparison to pass.
 
-In **single-byte encodings** (CP1251, CP1252), `0xFF` is a valid standalone character, so garbage gets appended to the string.
+In **single-byte encodings** (CP1251, CP1252), `0xFF` is a valid standalone character. The firmware VID becomes a long garbage string that fails to parse (returns 0.0), while the device VID remains clean (parses to 0.12). This mismatch causes the error.
 
 ## The Patch
 
