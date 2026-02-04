@@ -4,6 +4,21 @@
 
 A patch for the JieLi firmware updater used by **Free2 Bluetooth page turner** devices. Bypasses the VID (Version ID) check that fails due to a buffer handling bug in the DLL.
 
+## Recommended Solution
+
+**The issue has been fixed in official updater versions 1.2.6 and later.** Check the Hanlin Download Center for the latest version:
+
+| Resource | Link |
+|----------|------|
+| **Hanlin Download Center** | https://hanlinyue.com.cn/1755601629014 |
+| **Direct Download (v1.2.6)** | https://cdn.hanlinyue.com.cn/hanlinyue-win-1.2.6-x64.exe |
+
+Versions 1.2.6+ resolve the VID parsing bug that caused firmware flashing to fail on non-Chinese locales. **Use an updated version instead of the patch below.**
+
+> The patch and technical analysis below are preserved for historical/educational purposes.
+
+---
+
 ## Device Versions (VID)
 
 The VID (Version ID) identifies the device hardware generation:
@@ -23,11 +38,13 @@ The VID (Version ID) identifies the device hardware generation:
 
 ## Downloads
 
-| Resource | Link |
-|----------|------|
-| **Firmware (E730LJ)** | https://cdn.hanlinyue.com.cn/E730LJ.ufw |
-| **Firmware Browser** | https://hanlinyue.com.cn/1755595121764 |
-| **Updater App** | https://cdn.hanlinyue.com.cn/hanlinyue-win-1.2.3-ia32.exe |
+| Resource | Link | Notes |
+|----------|------|-------|
+| **Hanlin Download Center** | https://hanlinyue.com.cn/1755601629014 | Check for latest updater version |
+| **Updater App (v1.2.6+)** | https://cdn.hanlinyue.com.cn/hanlinyue-win-1.2.6-x64.exe | **Recommended** - v1.2.6 fixes the VID bug |
+| **Firmware (E730LJ)** | https://cdn.hanlinyue.com.cn/E730LJ.ufw | |
+| **Firmware Browser** | https://hanlinyue.com.cn/1755595121764 | |
+| **Updater App (v1.2.3)** | https://cdn.hanlinyue.com.cn/hanlinyue-win-1.2.3-ia32.exe | Older version - needs patch |
 
 > **Note:** If the sites don't open, try using a VPN (servers are located in China).
 
@@ -137,13 +154,17 @@ This allows flashing any firmware regardless of VID mismatch, which is safe for 
 
 ## Workarounds
 
-### Option 1: Use the Patched EXE (Recommended)
+### Option 1: Update to v1.2.6 or Later (Recommended)
 
-Download the pre-patched `UpdateFirmware.exe` from the [Releases](../../releases) section.
+Check the [Hanlin Download Center](https://hanlinyue.com.cn/1755601629014) for the latest version. Versions 1.2.6 and later fix the VID parsing bug. No patch needed.
 
-### Option 2: Use Locale Emulator
+### Option 2: Use the Patched EXE (for v1.2.3)
 
-If you prefer not to patch the executable, you can run it with Chinese locale using [Locale Emulator](https://github.com/xupefei/Locale-Emulator):
+If you need to use the older v1.2.3 version, download the pre-patched `UpdateFirmware.exe` from the [Releases](../../releases) section.
+
+### Option 3: Use Locale Emulator (for v1.2.3)
+
+If you prefer not to patch the executable, you can run the older v1.2.3 version with Chinese locale using [Locale Emulator](https://github.com/xupefei/Locale-Emulator):
 
 1. Download and install [Locale Emulator](https://github.com/xupefei/Locale-Emulator/releases)
 2. Run `LEInstaller.exe` and click "Install for current user"
@@ -155,7 +176,7 @@ If you prefer not to patch the executable, you can run it with Chinese locale us
 5. Set **Location** to `Chinese (Simplified)` and click **Save**
 6. The app will start and the profile is saved. Next time, just use **Run with application profile**
 
-### Option 3: Apply the Patch Yourself
+### Option 4: Apply the Patch Yourself (for v1.2.3)
 
 **PowerShell:**
 ```powershell
@@ -181,6 +202,8 @@ Both scripts will:
 ## Technical Details
 
 ### Compatibility
+
+> **Note:** This patch is only needed for updater versions prior to v1.2.6. Versions 1.2.6 and later fix the bug.
 
 This patch was developed for a specific version of the updater:
 
